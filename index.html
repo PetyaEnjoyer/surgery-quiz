@@ -134,18 +134,18 @@ function isRight(q, sel) {
   return sel.length === q.correct.length && sel.every(i => q.correct.includes(i));
 }
 
-const letter = pos => String.fromCharCode(97 + pos);
+const letter = i => String.fromCharCode(97 + i);
 
 // review renders static rows instead of buttons
 function optionsHtml(q, order, sel, answered, review) {
-  return order.map((i, pos) => {
+  return order.map(i => {
     let cls = sel.includes(i) ? "sel" : "";
     let mark = sel.includes(i) ? "✓" : "";
     if (answered) {
       if (q.correct.includes(i)) { cls += " ok"; mark = "✓"; }
       else if (sel.includes(i)) { cls += " bad"; mark = "✕"; }
     }
-    const inner = `<span class="box">${mark}</span><span>${letter(pos)}. ${esc(q.options[i])}</span>`;
+    const inner = `<span class="box">${mark}</span><span>${letter(i)}. ${esc(q.options[i])}</span>`;
     return review
       ? `<div class="opt ${cls}" data-i="${i}">${inner}</div>`
       : `<button class="opt ${cls}" data-i="${i}" ${answered ? "disabled" : ""} onclick="toggle(${i})">${inner}</button>`;
@@ -184,7 +184,7 @@ function renderResult() {
 function reviewHtml() {
   const log = st.log || [];
   if (!log.length) return "";
-  const letters = (order, idx) => order.map((i, pos) => idx.includes(i) ? letter(pos) : null).filter(Boolean).join(", ");
+  const letters = (order, idx) => order.filter(i => idx.includes(i)).map(letter).join(", ");
   const items = log.map((a, n) => ({ a, n, q: all[a.id], right: isRight(all[a.id], a.sel) }));
   const wrong = items.filter(x => !x.right).length;
   const shown = onlyWrong ? items.filter(x => !x.right) : items;
