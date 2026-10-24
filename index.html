@@ -78,18 +78,22 @@ const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&
 function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch {} }
 function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } }
 
-function sample(n) {
-  const ids = all.map((_, i) => i);
-  for (let i = ids.length - 1; i > 0; i--) {
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [ids[i], ids[j]] = [ids[j], ids[i]];
+    [a[i], a[j]] = [a[j], a[i]];
   }
-  return ids.slice(0, n);
+  return a;
 }
+
+function sample(n) { return shuffle(all.map((_, i) => i)).slice(0, n); }
+
+// option display order, indices into q.options
+function newOrder() { st.order = shuffle(all[st.ids[st.pos]].options.map((_, i) => i)); }
 
 function start() {
   st = { ids: sample(Math.min(N, all.length)), pos: 0, sel: [], answered: false, score: 0 };
-  save(); render();
+  newOrder(); save(); render();
 }
 
 function setActions(html) {
@@ -120,15 +124,16 @@ function isRight(q, sel) {
 function renderQuestion() {
   const q = all[st.ids[st.pos]];
   const total = st.ids.length;
-  const opts = q.options.map((o, i) => {
+  if (!st.order || st.order.length !== q.options.length) { newOrder(); save(); }
+  const opts = st.order.map((i, pos) => {
     let cls = st.sel.includes(i) ? "sel" : "";
     let mark = st.sel.includes(i) ? "✓" : "";
     if (st.answered) {
       if (q.correct.includes(i)) { cls += " ok"; mark = "✓"; }
       else if (st.sel.includes(i)) { cls += " bad"; mark = "✕"; }
     }
-    return `<button class="opt ${cls}" ${st.answered ? "disabled" : ""} onclick="toggle(${i})">
-      <span class="box">${mark}</span><span>${String.fromCharCode(97 + i)}. ${esc(o)}</span></button>`;
+    return `<button class="opt ${cls}" data-i="${i}" ${st.answered ? "disabled" : ""} onclick="toggle(${i})">
+      <span class="box">${mark}</span><span>${String.fromCharCode(97 + pos)}. ${esc(q.options[i])}</span></button>`;
   }).join("");
   const right = st.answered && isRight(q, st.sel);
   app.innerHTML = `
@@ -168,6 +173,7 @@ function answer() {
 
 function next() {
   st.pos++; st.sel = []; st.answered = false;
+  if (st.pos < st.ids.length) newOrder();
   save(); render(); window.scrollTo(0, 0);
 }
 
