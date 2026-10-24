@@ -44,7 +44,9 @@
   .opt.bad { border-color: var(--bad); background: var(--bad-bg); }
   .opt.bad .box { border-color: var(--bad); color: var(--bad); background: transparent; }
   .opt.ok.sel .box { background: var(--ok); color: #fff; }
-  .opt:disabled { cursor: default; }
+  .opt:disabled, div.opt { cursor: default; }
+  h2 { font-size: 19px; margin: 28px 0 0; }
+  .review .verdict { margin-bottom: 4px; }
   .verdict { font-weight: 600; margin-top: 10px; }
   .verdict.ok { color: var(--ok); } .verdict.bad { color: var(--bad); }
   .actions {
@@ -104,15 +106,19 @@ function setActions(html) {
 function renderStart() {
   const saved = load();
   const resume = saved && saved.ids && saved.pos < saved.ids.length;
+  const done = saved && saved.ids && saved.pos >= saved.ids.length;
   app.innerHTML = `
     <h1>Оперативная хирургия</h1>
     <p class="muted">${all.length} вопросов в базе, в тесте ${Math.min(N, all.length)} случайных.
     Правильных вариантов может быть несколько. Правильный ответ показывается сразу после ответа.</p>
     ${resume ? `<div class="card">Есть незаконченный тест: вопрос ${saved.pos + 1} из ${saved.ids.length},
-      правильно ${saved.score}.</div>` : ""}`;
+      правильно ${saved.score}.</div>` : ""}
+    ${done ? `<div class="card">Прошлый тест: ${saved.score} / ${saved.ids.length}.</div>` : ""}`;
   setActions(resume
     ? `<button class="btn sec" onclick="start()">Новый</button><button class="btn" onclick="resume()">Продолжить</button>`
-    : `<button class="btn" onclick="start()">Начать тест</button>`);
+    : done
+      ? `<button class="btn sec" onclick="resume()">Обзор</button><button class="btn" onclick="start()">Начать тест</button>`
+      : `<button class="btn" onclick="start()">Начать тест</button>`);
 }
 
 function resume() { st = load(); render(); }
@@ -121,20 +127,29 @@ function isRight(q, sel) {
   return sel.length === q.correct.length && sel.every(i => q.correct.includes(i));
 }
 
+const letter = pos => String.fromCharCode(97 + pos);
+
+// review renders static rows instead of buttons
+function optionsHtml(q, order, sel, answered, review) {
+  return order.map((i, pos) => {
+    let cls = sel.includes(i) ? "sel" : "";
+    let mark = sel.includes(i) ? "✓" : "";
+    if (answered) {
+      if (q.correct.includes(i)) { cls += " ok"; mark = "✓"; }
+      else if (sel.includes(i)) { cls += " bad"; mark = "✕"; }
+    }
+    const inner = `<span class="box">${mark}</span><span>${letter(pos)}. ${esc(q.options[i])}</span>`;
+    return review
+      ? `<div class="opt ${cls}" data-i="${i}">${inner}</div>`
+      : `<button class="opt ${cls}" data-i="${i}" ${answered ? "disabled" : ""} onclick="toggle(${i})">${inner}</button>`;
+  }).join("");
+}
+
 function renderQuestion() {
   const q = all[st.ids[st.pos]];
   const total = st.ids.length;
   if (!st.order || st.order.length !== q.options.length) { newOrder(); save(); }
-  const opts = st.order.map((i, pos) => {
-    let cls = st.sel.includes(i) ? "sel" : "";
-    let mark = st.sel.includes(i) ? "✓" : "";
-    if (st.answered) {
-      if (q.correct.includes(i)) { cls += " ok"; mark = "✓"; }
-      else if (st.sel.includes(i)) { cls += " bad"; mark = "✕"; }
-    }
-    return `<button class="opt ${cls}" data-i="${i}" ${st.answered ? "disabled" : ""} onclick="toggle(${i})">
-      <span class="box">${mark}</span><span>${String.fromCharCode(97 + pos)}. ${esc(q.options[i])}</span></button>`;
-  }).join("");
+  const opts = optionsHtml(q, st.order, st.sel, st.answered, false);
   const right = st.answered && isRight(q, st.sel);
   app.innerHTML = `
     <div class="top"><span>Вопрос ${st.pos + 1} из ${total}</span><span>Правильно: ${st.score}</span></div>
@@ -154,8 +169,25 @@ function renderResult() {
   app.innerHTML = `
     <h1>Тест завершён</h1>
     <div class="card"><div class="big">${st.score} / ${total}</div>
-    <div class="muted">${Math.round(st.score / total * 100)}% правильных ответов</div></div>`;
+    <div class="muted">${Math.round(st.score / total * 100)}% правильных ответов</div></div>
+    ${reviewHtml()}`;
   setActions(`<button class="btn" onclick="start()">Пройти ещё раз</button>`);
+}
+
+function reviewHtml() {
+  const log = st.log || [];
+  if (!log.length) return "";
+  const letters = (order, idx) => order.map((i, pos) => idx.includes(i) ? letter(pos) : null).filter(Boolean).join(", ");
+  return `<h2>Обзор ответов</h2>` + log.map((a, n) => {
+    const q = all[a.id];
+    const right = isRight(q, a.sel);
+    return `<div class="card review">
+      <p class="q">${n + 1}. ${esc(q.q)}</p>
+      ${optionsHtml(q, a.order, a.sel, true, true)}
+      <div class="verdict ${right ? "ok" : "bad"}">${right ? "Верно" : "Неверно"}</div>
+      <div class="muted">Ваш ответ: ${letters(a.order, a.sel)} · Правильный: ${letters(a.order, q.correct)}</div>
+    </div>`;
+  }).join("");
 }
 
 function toggle(i) {
@@ -168,6 +200,7 @@ function answer() {
   if (!st.sel.length) return;
   st.answered = true;
   if (isRight(all[st.ids[st.pos]], st.sel)) st.score++;
+  st.log = [...(st.log || []), { id: st.ids[st.pos], order: st.order, sel: st.sel }];
   save(); render();
 }
 
