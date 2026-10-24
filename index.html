@@ -47,6 +47,12 @@
   .opt:disabled, div.opt { cursor: default; }
   h2 { font-size: 19px; margin: 28px 0 0; }
   .review .verdict { margin-bottom: 4px; }
+  .seg { display: flex; gap: 6px; margin-top: 12px; padding: 4px; background: var(--line); border-radius: 11px; }
+  .seg button {
+    flex: 1; padding: 9px; border: 0; border-radius: 8px; background: transparent;
+    color: var(--muted); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+  }
+  .seg button.on { background: var(--card); color: var(--text); }
   .verdict { font-weight: 600; margin-top: 10px; }
   .verdict.ok { color: var(--ok); } .verdict.bad { color: var(--bad); }
   .actions {
@@ -71,7 +77,7 @@
 <script>
 const N = 100;
 const KEY = "surgery-quiz-v1";
-let all = [], st = null;
+let all = [], st = null, onlyWrong = false;
 
 const app = document.getElementById("app");
 const actions = document.getElementById("actions");
@@ -95,6 +101,7 @@ function newOrder() { st.order = shuffle(all[st.ids[st.pos]].options.map((_, i) 
 
 function start() {
   st = { ids: sample(Math.min(N, all.length)), pos: 0, sel: [], answered: false, score: 0 };
+  onlyWrong = false;
   newOrder(); save(); render();
 }
 
@@ -178,9 +185,15 @@ function reviewHtml() {
   const log = st.log || [];
   if (!log.length) return "";
   const letters = (order, idx) => order.map((i, pos) => idx.includes(i) ? letter(pos) : null).filter(Boolean).join(", ");
-  return `<h2>Обзор ответов</h2>` + log.map((a, n) => {
-    const q = all[a.id];
-    const right = isRight(q, a.sel);
+  const items = log.map((a, n) => ({ a, n, q: all[a.id], right: isRight(all[a.id], a.sel) }));
+  const wrong = items.filter(x => !x.right).length;
+  const shown = onlyWrong ? items.filter(x => !x.right) : items;
+  return `<h2>Обзор ответов</h2>
+    <div class="seg">
+      <button class="${onlyWrong ? "" : "on"}" onclick="setFilter(false)">Все (${items.length})</button>
+      <button class="${onlyWrong ? "on" : ""}" onclick="setFilter(true)">Ошибки (${wrong})</button>
+    </div>
+    ${shown.length ? "" : `<p class="muted">Ошибок нет.</p>`}` + shown.map(({ a, n, q, right }) => {
     return `<div class="card review">
       <p class="q">${n + 1}. ${esc(q.q)}</p>
       ${optionsHtml(q, a.order, a.sel, true, true)}
@@ -189,6 +202,8 @@ function reviewHtml() {
     </div>`;
   }).join("");
 }
+
+function setFilter(v) { onlyWrong = v; render(); }
 
 function toggle(i) {
   if (st.answered) return;
